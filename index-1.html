@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="bn"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>দোকানের হিসাব</title>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ac:#2a44c8;--bg:#f2f2f2;--ink:#1d1d1d;--mut:#777;--ln:#555;--gr:#1b7a34;--rd:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px 'Hind Siliguri',system-ui,sans-serif;padding:16px 16px 90px}
+#shop{font-size:14px;color:var(--mut);margin-bottom:4px}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;gap:8px}
+h1{font-size:28px;margin:0;font-weight:600}
+.dt{text-align:right;font-weight:600;font-size:15px}.dt small{display:block;color:var(--mut);font-weight:400}
+table{width:100%;border-collapse:collapse;border:1px solid var(--ln);margin-bottom:16px}
+th,td{border:1px solid var(--ln);padding:8px;text-align:right;vertical-align:top;font-size:15px}
+th{font-weight:500;text-align:center}td:first-child{text-align:left}
+td small{display:block;color:var(--mut);font-size:13px}
+.g{color:var(--gr);font-weight:600}.r{color:var(--rd);font-weight:600}
+tfoot td{font-weight:600}
+.act{display:flex;gap:8px;margin-top:6px;width:100%}
+.act button{font:inherit;font-size:13px;padding:4px 10px;border:1px solid #bbb;background:#fff;border-radius:8px}
+.act .del{color:var(--rd);border-color:#e3b3ad}.act .rc{color:var(--gr);border-color:#a9d3b3}
+.it{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;margin-bottom:10px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}
+.it small{display:block;color:var(--mut);font-size:13px}.it .rt{text-align:right;font-weight:600}
+.add{width:100%;font:inherit;font-weight:600;padding:13px;border:0;border-radius:12px;background:var(--ac);color:#fff;margin-top:4px}
+.sum{background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-weight:600}
+.emp{color:var(--mut);padding:14px 0}
+label{display:block;color:var(--mut);margin:12px 0 4px;font-size:15px}
+input,select{width:100%;font:inherit;padding:12px;border:1px solid #ddd;border-radius:10px;background:#f2f2f2;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--ac)}
+#md{position:fixed;inset:0;background:rgba(0,0,0,.4);overflow:auto;padding:16px;z-index:5}
+#md>div{background:#fff;border-radius:16px;padding:18px;max-width:480px;margin:0 auto}
+#md h3{margin:0 0 4px;font-size:20px}
+.bt{display:flex;gap:10px;margin-top:18px}
+.bt button{flex:1;font:inherit;padding:12px;border-radius:10px;border:1px solid #bbb;background:#fff}
+.bt .ok{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
+.row2{display:flex;gap:8px;flex-wrap:wrap}.row2 button,.row2 label.fb{font:inherit;padding:10px 14px;border-radius:10px;border:1px solid #bbb;background:#fff;margin:0;color:var(--ink)}
+nav{position:fixed;left:0;right:0;bottom:0;background:#fafaf5;border-top:1px solid #ddd;display:flex;overflow-x:auto;padding-bottom:8px}
+nav button{flex:0 0 auto;font:inherit;font-size:17px;padding:14px 14px 10px;border:0;border-top:3px solid transparent;background:none;color:#555}
+nav button.on{border-top-color:var(--ac);color:var(--ac);font-weight:600}
+</style></head><body>
+<div id="shop"></div><div id="app"></div><div id="md" hidden></div>
+<nav id="nav"></nav>
+<script>
+const K='dokan_v2',DG='০১২৩৪৫৬৭৮৯';
+let D=null;try{D=JSON.parse(localStorage.getItem(K))}catch(e){}
+D=D||{shop:'',color:'#2a44c8',products:[],sales:[],exp:[],mah:[],con:[],n:1};
+const bn=n=>String(n).replace(/\d/g,d=>DG[d]);
+const money=n=>(n<0?'-':'')+'৳'+bn(Math.round(Math.abs(n)*100)/100);
+const toEn=s=>String(s).replace(/[০-৯]/g,d=>DG.indexOf(d));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const save=()=>localStorage.setItem(K,JSON.stringify(D));
+const uid=()=>D.n++;
+const sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+const sold=id=>sum(D.sales.filter(s=>s.pid==id),s=>s.qty);
+const left=p=>p.qty-sold(p.id);
+const total=s=>s.sell*s.qty;
+let tab='sales',day=today();
+const TABS=[['sales','বিক্রি'],['stock','স্টক'],['due','বাকি'],['exp','খরচ'],['mah','মহাজন'],['con','ফোনবুক'],['acc','হিসাব']];
+
+// ---- schemas: every record type can be added, edited, deleted ----
+const S={
+ sales:{t:'বিক্রি',arr:()=>D.sales,def:()=>({pid:D.products[0]?.id,qty:1,sell:D.products[0]?.sell??'',paid:'',cust:'',date:day}),
+  pre:r=>({...r,paid:r.paid<total(r)?r.paid:''}),
+  f:()=>[{k:'pid',l:'পণ্য',t:'sel',o:D.products.map(p=>[p.id,p.name+' ('+bn(left(p))+' টি)'])},{k:'qty',l:'সংখ্যা',t:'num'},{k:'sell',l:'দাম (প্রতি পিস)',t:'num'},{k:'paid',l:'কত টাকা পেলেন? (ফাঁকা রাখলে পুরো টাকা)',t:'num',opt:1},{k:'cust',l:'কাস্টমারের নাম (বাকি হলে আবশ্যক)',t:'txt',opt:1},{k:'date',l:'তারিখ',t:'date'}],
+  chk:o=>!D.products.find(p=>p.id==o.pid)?'আগে স্টকে পণ্য যোগ করুন':!(o.qty>0)?'সংখ্যা লিখুন':o.sell===''?'দাম লিখুন':(o.paid!==''&&o.paid<o.sell*o.qty&&!o.cust.trim())?'বাকি হলে কাস্টমারের নাম লিখুন':'',
+  fix:(o,r)=>{const p=D.products.find(p=>p.id==o.pid);o.name=p.name;if(!r||r.pid!=o.pid)o.buy=p.buy;const t=o.sell*o.qty;if(o.paid===''||o.paid>t)o.paid=t;}},
+ products:{t:'পণ্য',arr:()=>D.products,def:()=>({name:'',buy:'',sell:'',qty:''}),
+  f:()=>[{k:'name',l:'পণ্যের নাম',t:'txt'},{k:'buy',l:'ক্রয় মূল্য (প্রতি পিস)',t:'num'},{k:'sell',l:'বিক্রি মূল্য (প্রতি পিস)',t:'num'},{k:'qty',l:'মোট কেনা সংখ্যা',t:'num'}],
+  chk:o=>!o.name.trim()?'পণ্যের নাম লিখুন':(o.buy===''||o.sell===''||o.qty==='')?'দাম ও সংখ্যা লিখুন':''},
+ exp:{t:'খরচ',arr:()=>D.exp,def:()=>({date:today(),note:'',amt:''}),
+  f:()=>[{k:'date',l:'তারিখ',t:'date'},{k:'note',l:'কী খরচ',t:'txt'},{k:'amt',l:'টাকা',t:'num'}],
+  chk:o=>!o.note.trim()?'কী খরচ লিখুন':o.amt===''?'টাকা লিখুন':''},
+ mah:{t:'মহাজন',arr:()=>D.mah,def:()=>({name:'',amt:'',note:''}),
+  f:()=>[{k:'name',l:'মহাজন / কোম্পানির নাম',t:'txt'},{k:'amt',l:'কত টাকা দিতে হবে',t:'num'},{k:'note',l:'নোট',t:'txt',opt:1}],
+  chk:o=>!o.name.trim()?'নাম লিখুন':o.amt===''?'টাকা লিখুন':''},
+ con:{t:'ফোনবুক',arr:()=>D.con,def:()=>({name:'',phone:'',note:''}),
+  f:()=>[{k:'name',l:'নাম',t:'txt'},{k:'phone',l:'ফোন নম্বর',t:'tel',opt:1},{k:'note',l:'নোট',t:'txt',opt:1}],
+  chk:o=>!o.name.trim()?'নাম লিখুন':''}
+};
+const act=(ty,id,extra='')=>`<div class="act">${extra}<button onclick="openForm('${ty}',${id})">✏️ এডিট</button><button class="del" onclick="del('${ty}',${id})">🗑 মুছুন</button></div>`;
+const addBtn=(ty,l)=>`<button class="add" onclick="openForm('${ty}',0)">+ ${l}</button>`;
+const hd=(t,r='')=>`<div class="hd"><h1>${t}</h1>${r}</div>`;
+function lst(ty,title,fn,top=''){const a=S[ty].arr();
+ return hd(title)+top+(a.length?a.map(r=>{const[m,s,rt]=fn(r);return `<div class="it"><div><b>${m}</b><small>${s}</small></div><div class="rt">${rt}</div>${act(ty,r.id)}</div>`}).join(''):'<div class="emp">এখনো কিছু নেই</div>')+addBtn(ty,'নতুন যোগ করুন');}
+
+// ---- pages ----
+const V={
+ sales(){const ds=D.sales.filter(s=>s.date==day);let b=0,t=0;
+  const rows=ds.map(s=>{const bb=s.buy*s.qty,tt=total(s);b+=bb;t+=tt;const du=tt-s.paid;
+   return `<tr><td>${esc(s.name)} × ${bn(s.qty)}<small>${du>0?'বাকি '+money(du)+(s.cust?', '+esc(s.cust):''):'নগদ'}</small>${act('sales',s.id)}</td><td>${money(bb)}</td><td>${money(tt)}</td><td class="g">${money(tt-bb)}</td></tr>`}).join('');
+  const dd=new Date(day+'T00:00');
+  return hd('আজকের বিক্রি',`<div class="dt">${dd.toLocaleDateString('bn-BD',{day:'numeric',month:'long',year:'numeric'})}<small>${dd.toLocaleDateString('bn-BD',{weekday:'long'})}</small></div>`)+
+  `<table><thead><tr><th>পণ্যের নাম</th><th>ক্রয় মূল্য</th><th>বিক্রি মূল্য</th><th>প্রফিট</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="emp">এই তারিখে কোনো বিক্রি নেই</td></tr>'}</tbody><tfoot><tr><td>মোট</td><td>${money(b)}</td><td>${money(t)}</td><td class="g">${money(t-b)}</td></tr></tfoot></table>`+
+  addBtn('sales','নতুন বিক্রি যোগ করুন')+`<label>অন্য তারিখের বিক্রি দেখুন বা ঠিক করুন</label><input type="date" value="${day}" onchange="day=this.value||today();render()">`;},
+ stock:()=>lst('products','স্টক',p=>[esc(p.name),`কেনা ${money(p.buy)}, বিক্রি ${money(p.sell)}`,left(p)<=0?'<span class="r">শেষ</span>':'আছে '+bn(left(p))+' টি']),
+ due(){const a=D.sales.filter(s=>total(s)-s.paid>0.001);
+  return hd('বাকি')+`<div class="sum">মোট পাওনা: <span class="r">${money(sum(a,s=>total(s)-s.paid))}</span></div>`+
+  (a.length?a.map(s=>`<div class="it"><div><b>${esc(s.cust||'নাম নেই')}</b><small>${esc(s.name)} × ${bn(s.qty)}, ${new Date(s.date+'T00:00').toLocaleDateString('bn-BD',{day:'numeric',month:'short'})}</small></div><div class="rt r">${money(total(s)-s.paid)}</div>${act('sales',s.id,`<button class="rc" onclick="recv(${s.id})">টাকা পেলাম</button>`)}</div>`).join(''):'<div class="emp">কোনো বাকি নেই</div>');},
+ exp:()=>lst('exp','খরচ',e=>[esc(e.note),new Date(e.date+'T00:00').toLocaleDateString('bn-BD',{day:'numeric',month:'long'}),money(e.amt)],`<div class="sum">আজকের খরচ: ${money(sum(D.exp.filter(e=>e.date==today()),e=>e.amt))}</div>`),
+ mah:()=>lst('mah','মহাজন',m=>[esc(m.name),esc(m.note||''),`<span class="r">${money(m.amt)}</span>`],`<div class="sum">মোট দেনা: <span class="r">${money(sum(D.mah,m=>m.amt))}</span></div>`),
+ con:()=>lst('con','ফোনবুক',c=>[esc(c.name),esc(c.note||''),c.phone?`<a href="tel:${esc(c.phone)}">${bn(esc(c.phone))}</a>`:'']),
+ acc(){const td=D.sales.filter(s=>s.date==today());
+  const P=a=>sum(a,s=>total(s)-s.buy*s.qty),R=a=>sum(a,total),ex=sum(D.exp,e=>e.amt),exT=sum(D.exp.filter(e=>e.date==today()),e=>e.amt);
+  const line=(l,v,c='')=>`<div class="it"><div>${l}</div><div class="rt ${c}">${money(v)}</div></div>`;
+  return hd('হিসাব')+line('আজকের বিক্রি',R(td))+line('আজকের প্রফিট',P(td),'g')+line('আজকের খরচ',exT)+line('আজকের নিট লাভ',P(td)-exT,'g')+
+  line('মোট বিক্রি',R(D.sales))+line('মোট প্রফিট',P(D.sales),'g')+line('মোট খরচ',ex)+line('মোট নিট লাভ',P(D.sales)-ex,'g')+
+  line('বাকি পাওনা',sum(D.sales,s=>total(s)-s.paid),'r')+line('মহাজনের দেনা',sum(D.mah,m=>m.amt),'r')+line('স্টকে থাকা মালের দাম (ক্রয় মূল্যে)',sum(D.products,p=>Math.max(0,left(p))*p.buy))+
+  `<h3>নিজের মতো সাজান</h3><label>দোকানের নাম</label><input value="${esc(D.shop)}" onchange="D.shop=this.value;save();render()"><label>রং</label><input type="color" value="${D.color}" onchange="D.color=this.value;save();render()" style="height:46px;padding:4px">`+
+  `<h3>ব্যাকআপ</h3><div class="row2"><button onclick="bk()">ব্যাকআপ নামান</button><label class="fb">ব্যাকআপ ফিরিয়ে আনুন<input type="file" accept=".json" hidden onchange="rs(this)"></label><button class="del" style="color:var(--rd)" onclick="wipe()">সব মুছুন</button></div>`;}
+};
+
+function render(){document.documentElement.style.setProperty('--ac',D.color||'#2a44c8');
+ document.getElementById('shop').textContent=D.shop;
+ document.getElementById('app').innerHTML=V[tab]();
+ document.getElementById('nav').innerHTML=TABS.map(([k,l])=>`<button class="${k==tab?'on':''}" onclick="tab='${k}';render();scrollTo(0,0)">${l}</button>`).join('');}
+
+// ---- add / edit / delete ----
+function openForm(ty,id){const c=S[ty];
+ if(ty=='sales'&&!D.products.length){alert('আগে স্টক ট্যাবে পণ্য যোগ করুন');return}
+ const r=id?c.arr().find(x=>x.id==id):null,v=r?(c.pre?c.pre(r):r):c.def();
+ let h=`<div><h3>${id?'এডিট করুন':'নতুন'}: ${c.t}</h3>`;
+ c.f().forEach(f=>{const val=v[f.k]??'';h+=`<label>${f.l}</label>`;
+  h+=f.t=='sel'?`<select id="f_${f.k}" onchange="pc(this)">${f.o.map(o=>`<option value="${o[0]}"${o[0]==val?' selected':''}>${esc(o[1])}</option>`).join('')}</select>`
+   :`<input id="f_${f.k}" type="${f.t=='num'?'number':f.t=='date'?'date':f.t=='tel'?'tel':'text'}"${f.t=='num'?' inputmode="decimal" step="any"':''} value="${esc(val)}">`;});
+ h+=`<div class="bt"><button class="ok" onclick="sv('${ty}',${id})">সেভ করুন</button><button onclick="cm()">বাতিল</button></div></div>`;
+ const m=document.getElementById('md');m.innerHTML=h;m.hidden=false;}
+function pc(sel){const p=D.products.find(p=>p.id==sel.value),s=document.getElementById('f_sell');if(p&&s)s.value=p.sell;}
+function cm(){document.getElementById('md').hidden=true}
+function sv(ty,id){const c=S[ty],o={};
+ c.f().forEach(f=>{const x=document.getElementById('f_'+f.k).value;o[f.k]=f.t=='num'?(x===''?'':+x):f.t=='sel'?+x:x});
+ const e=c.chk(o);if(e){alert(e);return}
+ const r=id?c.arr().find(x=>x.id==id):null;
+ if(c.fix)c.fix(o,r);
+ if(r)Object.assign(r,o);else c.arr().push({id:uid(),...o});
+ save();cm();render();}
+function del(ty,id){if(!confirm('এটা মুছে ফেলবেন? মুছলে আর ফেরত আসবে না।'))return;
+ const a=S[ty].arr();a.splice(a.findIndex(x=>x.id==id),1);save();render();}
+function recv(id){const s=D.sales.find(x=>x.id==id),du=total(s)-s.paid;
+ const v=prompt('কত টাকা পেলেন? (বাকি '+money(du)+')',du);if(v===null)return;
+ const n=+toEn(v);if(!(n>0)){alert('সঠিক টাকা লিখুন');return}
+ s.paid=Math.min(total(s),s.paid+n);save();render();}
+function bk(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));a.download='dokan-backup-'+today()+'.json';a.click();}
+function rs(i){const f=i.files[0];if(!f)return;const r=new FileReader();
+ r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.sales||!x.products)throw 0;D=x;save();render();alert('ফিরিয়ে আনা হয়েছে')}catch(e){alert('ফাইলটি ঠিক নয়')}};r.readAsText(f);}
+function wipe(){if(confirm('সব হিসাব মুছে যাবে। আগে ব্যাকআপ নিয়েছেন?')&&confirm('সত্যিই সব মুছবেন?')){D={shop:'',color:'#2a44c8',products:[],sales:[],exp:[],mah:[],con:[],n:1};save();render();}}
+render();
+</script></body></html>
